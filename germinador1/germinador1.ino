@@ -5,190 +5,134 @@
 #include <DHT.h>
 
 //defines
-#define PIN_SENSOR_TIERRA A2
-#define PIN_SENSOR_TEMP A5
-#define MODELO_DE_SENSOR DHT11
+int pinGroungSensor = A0;
+int pinPumpIrrigation = 13;
 
-#define PIN_LUZ 2
-#define PIN_BOMBA 3
+//vars to ground measure
+int humGround;
+int limHumGround = 30;
 
-#define TIEMPO_MEDIR_TIERRA 3600000
-#define HUM_TIERRA_MIN 40
-#define TIEMPO_DE_RIEGO 2000
+unsigned long timeTryIrrigation;
+unsigned long timeIrrigate;
 
-//variables
-int valorMaximo2 = 560;//humedad tierra
-int valorMinimo2 = 250;
-int valorLeidoHumedad;
-int mapeoTierra;
+unsigned long timeRefSystemReport = 0;
+int cont=0;
 
-int humedad;//temperatura y humedad
-int temperatura;
-
-int hora;
-int minutos;
-
-unsigned long tiempoReferencia = 0;//tareas temporales
-unsigned long tiempoMillis;
-
-//objetos
-ThreeWire myWire(3, 4, 2);
-RtcDS1302<ThreeWire> Rtc(myWire);
-LiquidCrystal_I2C lcd(0x27, 16, 2);
-DHT dht(PIN_SENSOR_TEMP, MODELO_DE_SENSOR);
 
 //setup
-void setup(){
-
-  //inicializaciones
-  dht.begin();
-  lcd.init();
-  lcd.backlight();
-  Rtc.Begin();
-  RtcDateTime fechaYHoraDeCompilacion = RtcDateTime(__DATE__, __TIME__);
-  Rtc.SetDateTime(fechaYHoraDeCompilacion);
-
-  pinMode(PIN_BOMBA, OUTPUT);
-  pinMode(PIN_LUZ, OUTPUT);
+void setup() {
 
   Serial.begin(115200);
-  Serial.println("setup ok");
+  pinMode(pinPumpIrrigation, OUTPUT);
+
+  Serial.println("--------- setup ok ------------ "); 
 
 }
 
 //loop
-void loop(){
+void loop() {
 
-  //hora
-  RtcDateTime tiempoActual = Rtc.GetDateTime();
-  hora = tiempoActual.Hour();
-  minutos = tiempoActual.Minute();
+  //asignations
+  timeTryIrrigation = minToMillis(30);
+  timeIrrigate = secToMillis(5);
 
-  //temperatura y humedad
-  humedad = dht.readHumidity();
-  temperatura = dht.readTemperature();
+  //read grund humidity
+  humGround = measureGround(pinGroungSensor);
 
-  //ciclos de luz
-  /*si esta dentro del horario de iluminacion los focos estaran encendidos, sino permaneceran apagados*/
-  if (hora > 8 && hora < 19) {
-    digitalWrite(PIN_LUZ, true);
-  }else {
-    digitalWrite(PIN_LUZ, false);
-  }
+  //hum actual - limite minimo - cada cuanto tiempo intentara - tiempo de riego - pin de bomba
+  irrigationSystem(humGround, limHumGround, timeTryIrrigation, timeIrrigate, pinPumpIrrigation);
 
-  //lectura humedad tierra
-  medirHumTierra();
-
-  //riego
-  activarBomba();
-
-  //pantalla
-  lcd.setCursor(0, 0);//fila 1
-  lcd.print("t:");
-  lcd.print(temperatura);
-  lcd.print(" h:");
-  lcd.print(humedad);
-
-  lcd.setCursor(0, 1);//fila 2
-  lcd.print("ht:");
-  lcd.print(mapeoTierra);
-  lcd.print("  ");
-  lcd.print(hora);
-  lcd.print(":");
-  lcd.print(minutos);
-
-  //mostrar estado del sistema 
-  reporteSistema();
-  
+  //mostrar estado del sistema
+  systemReport(secToMillis(1));
 }
 
+
 //procedimiento para mostrar estado del sistema por el monitor serie
-void reporteSistema(){
+void systemReport(unsigned long timeReport) {
 
-      unsigned long tiempoMilli=millis();
-      unsigned long tiempoReferencia=0;
+  unsigned long timeActual = millis();
 
-      if (tiempoMillis - tiempoReferencia >= 2000) {
-      tiempoReferencia = tiempoMillis;
+  if (timeActual - timeRefSystemReport >= timeReport) {
+    timeRefSystemReport = timeActual;
 
-      Serial.println(" ");
-      
-      Serial.print("hora: ");
-      Serial.print(hora);
-      Serial.print(":");
-      Serial.println(minutos);
+    cont=cont+1;
 
-      Serial.print("temperatura: ");
-      Serial.print(temperatura);
-      Serial.print("º    humedad: ");
-      Serial.print(humedad);
-      Serial.println("%");
+    Serial.println(" "); 
+    Serial.println(cont);
 
-      Serial.print("humedad tierra: ");
-      Serial.print(mapeoTierra);
-      Serial.println("%");
+    /*
+    Serial.println(timeReport);
+    Serial.println(timeRefSystemReport);
+    Serial.println(timeActual);*/
 
-      Serial.print("sistema de iluminacion: ");
-      Serial.println(PIN_LUZ);
 
-      Serial.print("sistema de riego: ");
-      Serial.println(PIN_BOMBA);
-      
-      Serial.println(" ");
+    Serial.print("Ground humidity:");
+    Serial.println(humGround);
 
-  
-      }
-      
+    Serial.print("Limit ground humidity:");
+    Serial.println(limHumGround);
+
+    Serial.print("pinPump:");
+    Serial.println(pinPumpIrrigation);
+
+    Serial.print("time irrigate:");
+    Serial.println(timeIrrigate);
+
+    Serial.print("time to try irrigation:");
+    Serial.println(timeTryIrrigation);
+
+    Serial.println(" ");
+  }
 }
 
 //procedimiento que mide la humedad del suelo
 /*se lee la humedad del suelo, actualizando los limites de la variable y mapeando el valor en 0-100*/
-void medirHumTierra(){
+int measureGround(int pinSensor) {
 
-  valorLeidoHumedad = analogRead(PIN_SENSOR_TIERRA);
+  int readValueHumidity = analogRead(pinSensor);
+  int valueMin = 250;
+  int valueMax = 560;
 
-  if (valorLeidoHumedad < valorMinimo2) {
-    valorMinimo2 = valorLeidoHumedad;
-  }else if (valorLeidoHumedad > valorMaximo2) {
-    valorMaximo2 = valorLeidoHumedad;
+  //ajuste re rangos
+  if (readValueHumidity < valueMin) {
+    valueMin = readValueHumidity;
+  } else if (readValueHumidity > valueMax) {
+    valueMax = readValueHumidity;
   }
 
-  mapeoTierra = map(valorLeidoHumedad, valorMinimo2, valorMaximo2, 100, 0);
-  mapeoTierra = constrain(mapeoTierra, 0, 100);
+  int mapGroundHumidity = map(readValueHumidity, valueMin, valueMax, 100, 0);
+  mapGroundHumidity = constrain(mapGroundHumidity, 0, 100);
 
+  return mapGroundHumidity;
 }
 
-//procedimiento para activar bomba de riego
-/*cada 1 hora se verifica si la humedad de a tierra esta bien, y si no esta, se riega durante 1s*/
-void activarBomba(){
+//procedure of system irrigation
+/*cada x tiempo se verifica si la humedad de la tierra esta bien, y si no esta, se riega durante 1s*/
+void irrigationSystem(int humGround, int groudHumMin, int timeTry, int timeIrrigation, int pinPump) {
 
-    unsigned long tiempoMilli=millis();
-    unsigned long tiempoReferencia=0;
+  unsigned long timeAcPump = millis();
+  unsigned long timeRefPump = 0;
 
-  if (tiempoMillis - tiempoReferencia >= TIEMPO_MEDIR_TIERRA) {
+  if (timeAcPump - timeRefPump >= timeTry) {
 
-      tiempoReferencia = tiempoMillis;
+    timeRefPump = timeAcPump;
 
-      if (mapeoTierra < HUM_TIERRA_MIN) {
+    if (humGround < groudHumMin) {
 
-        digitalWrite(PIN_BOMBA, true);
-        delay(TIEMPO_DE_RIEGO);
-        digitalWrite(PIN_BOMBA, false);
-      }
+      digitalWrite(pinPump, true);
+      delay(timeIrrigation);
+      digitalWrite(pinPump, false);
+    }
   }
-
-
 }
 
+//funciones para pasar de unidades de tiempo
+unsigned long secToMillis(int seconds) {
+  unsigned long millis = seconds * 1000;
+  return millis;
+}
 
-
-
-
-
-
-
-
-
-
-
-
+unsigned long minToMillis(int minutes) {
+  unsigned long millis = minutes*60000 ;
+  return millis;
+}
