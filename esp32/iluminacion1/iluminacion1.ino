@@ -1,9 +1,13 @@
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+//librerias
 #include <WiFi.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 
+//defines 
+#define lighStartTime 7
+#define lighEndTime 20
+
+//credenciales WiFi
 const char *ssid = "Fibertel WiFi692 2.4GHz";
 const char *password = "leticia2020";
 
@@ -11,80 +15,65 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
 
 // Pin para controlar el relé
-const int pinRelay = 2;  // Asígnalo al pin que estás utilizando
-
-// Configuración para la pantalla LCD
-const int I2C_ADDR = 0x27; // Dirección I2C de la pantalla
-const int LCD_COLS = 16;   // Número de columnas en la pantalla
-const int LCD_ROWS = 2;    // Número de filas en la pantalla
-LiquidCrystal_I2C lcd(I2C_ADDR, LCD_COLS, LCD_ROWS);
+const int pinLigh = 2;  
 
 void setup() {
+
   Serial.begin(115200);
   WiFi.begin(ssid, password);
 
-  int cont = 0;
   while (WiFi.status() != WL_CONNECTED) {
-    cont++;
+    Serial.println("Conectando a WiFi");
     delay(1000);
-    Serial.print(cont);
-    Serial.println("- Conectando a WiFi...");
   }
 
   timeClient.setTimeOffset(-3 * 3600);
   timeClient.begin();
 
-  // Configurar el pin del relé como salida
-  pinMode(pinRelay, OUTPUT);
-  // Inicialmente apagar el foco (o relé)
-  digitalWrite(pinRelay, LOW);
-
-  // Inicializar la pantalla LCD
-  lcd.begin(LCD_COLS, LCD_ROWS);
-  lcd.backlight(); // Encender la retroiluminación
+  // Configurar el pin de la iluminacion como salida
+  pinMode(pinLigh, OUTPUT);
+  digitalWrite(pinLigh, LOW);
 }
 
 void loop() {
+
+  //si no hay wifi se apaga la iluminacion
   if (WiFi.status() != WL_CONNECTED) {
-    lcd.clear();
-    lcd.print("WiFi Desconectado");
     Serial.println("WiFi desconectado");
-    lcd.setCursor(0, 1);
-    lcd.print("Apagando el foco");
-    digitalWrite(pinRelay, LOW); // Apagar el relé por precaución
-    delay(60000); // Esperar 1 minuto antes de intentar reconectar
-    return;
+    digitalWrite(pinLigh, LOW); 
+    delay(60000); // Se reintenta conectar cada 1 min
   }
 
   timeClient.update();
-  Serial.println(timeClient.getFormattedTime());
+  Serial.println("\ncurrent time arg: "+timeClient.getFormattedTime());
 
   int currentHour = timeClient.getHours();
 
   // Calcular las horas restantes hasta el próximo cambio de estado
-  int hoursRemaining = 0;
+  int hoursRemaining;
 
-  if (currentHour >= 8 && currentHour < 20) {
-    lcd.clear();
-    lcd.print("Encendiendo foco");
-    Serial.println("Iluminacion encendida");
-    hoursRemaining = 20 - currentHour;
-    digitalWrite(pinRelay, HIGH); // Encender el relé
-  } else {
-    lcd.clear();
-    lcd.print("Apagando foco");
-    Serial.println("Iluminacion apagada");
-    hoursRemaining = 8 - currentHour;
-    digitalWrite(pinRelay, LOW); // Apagar el relé
-  }
+    // Si la hora actual está en el horario de iluminación, se enciende el sistema de iluminación
+  if (currentHour >= lighStartTime && currentHour < lighEndTime) {
+      Serial.println("ligh ON");
+      hoursRemaining = lighEndTime - currentHour;
+      digitalWrite(pinLigh, HIGH);
 
-  // Mostrar las horas restantes en la segunda línea
-  lcd.setCursor(0, 1);
-  lcd.print("Horas restantes: ");
-  lcd.print(hoursRemaining);
-  Serial.print("Horas restantes: ");
+  }else{
+      
+    Serial.println("ligh OFF");
+    digitalWrite(pinLigh, LOW);
+
+    if (currentHour >= lighEndTime) {
+      hoursRemaining = (24 - currentHour) + lighStartTime;
+    } 
+    else {
+      hoursRemaining = lighStartTime - currentHour;
+    }
+  } 
+
+  // Mostrar las horas restantes
+  Serial.print("Hours Remaining: ");
   Serial.println(hoursRemaining);
-
 
   delay(1000); // Espera 1 segundo
 }
