@@ -1,9 +1,3 @@
-//librerias
-#include <LiquidCrystal_I2C.h>
-#include <ThreeWire.h>
-#include <RtcDS1302.h>
-#include <DHT.h>
-
 //defines
 int pinGroungSensor = A0;
 int pinPumpIrrigation = 13;

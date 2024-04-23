@@ -49,13 +49,6 @@ void loop()
 
 //si no hay wifi se apagan los focos, y si hay segun el horario se encienden o apagan.
 void iluminationSystem(int pinLigh,int lighStartTime,int lighEndTime){
-  
-  //si no hay wifi se apaga la iluminacion
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi desconectado");
-    digitalWrite(pinLigh, LOW); 
-    delay(60000); // Se reintenta conectar cada 1 min
-  }
 
   // Calcular las horas restantes hasta el próximo cambio de estado
   int currentHour = timeClient.getHours();
