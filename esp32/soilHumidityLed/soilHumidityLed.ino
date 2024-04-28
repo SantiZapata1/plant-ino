@@ -3,6 +3,9 @@ para que detecte otra lectura y arranque a funcionar correctamente
 
 TENER EN CUENTA: las lecturas del sensor varian segun que tanto lo metamos en la tierra.
 
+Feature: medir cuanto tarda desde que esta seca la tierra hasta que se estabilicen las lecturas despues de regar
+
+
 */
 //library
 #include <Arduino.h>
@@ -11,7 +14,9 @@ TENER EN CUENTA: las lecturas del sensor varian segun que tanto lo metamos en la
 const int sensorPinSoilMeasure = 34;  // Pin al que está conectado el sensor de humedad de suelo
 const int ledSoilHumidity = 2;        // Pin del LED interno de la placa ESP32
 
-const int humidityLimit = 30;  // Humedad de suelo límite
+//tener en cuenta que este valor depende de cuanto metamos el sensor en la tierra, y del lugar en donde lo pongamos, porque
+//mientras mas al costado este el sensor menor va a ser la lectura de humedad
+const int humidityLimit = 35;  // Humedad de suelo límite
 
 int soilHumidity = 0;  // Variable para almacenar la lectura de humedad de suelo
 bool ledOn = false;    // Estado actual del LED
